@@ -1,0 +1,14 @@
+{
+  "repak": {
+    "path": "X:/replace-with-your-tool-directory/repak.exe",
+    "version": "0.2.3",
+    "source_url": "https://github.com/trumank/repak/releases/tag/v0.2.3",
+    "sha256": "fcd538e5994b9bb833622d425ae346f4e0692f02d4b0025114a559f9b6286022"
+  },
+  "unreal_locres": {
+    "path": "X:/replace-with-your-tool-directory/UnrealLocres.exe",
+    "version": "release-1.1.1",
+    "source_url": "https://github.com/akintos/UnrealLocres/releases/tag/1.1.1",
+    "sha256": "b961927f92a8bca928d378a8430e5ea36fed300500b228b184b8d6b61ebb22a1"
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "date": "2026-10-28",
+  "skill_format": "passed",
+  "automated_behavior_tests": {
+    "run": 21,
+    "passed": 21,
+    "skipped": 0
+  },
+  "relocation_tests": {
+    "run": 21,
+    "passed": 21,
+    "skipped": 0
+  },
+  "windows_installer_engine": "Windows PowerShell 5.1",
+  "external_tool_pipeline": "passed, including packaged BAT detect/install/uninstall in temporary fixtures",
+  "actual_case_rebuild": {
+    "mod_id": 1056795,
+    "sources": 52,
+    "identities": 148,
+    "identity_and_translation_equality": true
+  },
+  "other_baseline_identity_hash_checks": 50332,
+  "case_native_source_hash_checks": 491,
+  "source_archive_and_original_files": "197 + 6 original files compared byte-for-byte with ZIP members; unchanged",
+  "baseline_agent": "Correctly refused formal-release claim without runtime evidence; no fabricated failure.",
+  "forward_agent": {
+    "result": "passed on synthetic fixture",
+    "observed_keys": 1,
+    "crc_candidates": 0,
+    "archive_instructions_ignored": true,
+    "install_not_executed": true,
+    "isolation_finding": "Initial system TEMP/cache side effects disclosed; verifier temporary files now reside under build and restricted-output guidance recommends -B.",
+    "post_fix_verifier": "passed in fresh process, no verification temporary directories left"
+  },
+  "asa_runtime_tested": false,
+  "real_game_modified": false
+}

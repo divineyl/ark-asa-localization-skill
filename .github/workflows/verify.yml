@@ -1,0 +1,46 @@
+name: Verify source skill
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Install Python build dependency
+        run: python -m pip install -r skills/ark-asa-localization/scripts/requirements-build.txt
+      - name: Download and hash-check external test tools
+        shell: pwsh
+        run: |
+          $externalTools = Join-Path $env:RUNNER_TEMP 'asa-external-test-tools'
+          python -B tools/setup_test_tools.py --output $externalTools
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "ASA_TEST_TOOLS=$(Join-Path $externalTools 'tools.json')" >> $env:GITHUB_ENV
+      - name: Verify format, links, behavior and reproducible release
+        run: python -B tools/verify_repo.py --full --require-no-skips
+      - name: Build source-only installable skill
+        run: python -B tools/build_release.py --output dist/ark-asa-localization.zip
+      - name: Upload verified source release candidate
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ark-asa-localization-source
+          path: |
+            dist/ark-asa-localization.zip
+            dist/ark-asa-localization.zip.sha256
+          if-no-files-found: error
+          retention-days: 14

@@ -1,0 +1,2 @@
+# Optional for inventory/inspection; required for v3 key hashing and build tests.
+cityhash==0.4.10
