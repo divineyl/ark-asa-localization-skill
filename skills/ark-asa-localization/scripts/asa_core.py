@@ -153,13 +153,20 @@ def inventory(root):
 def translation_errors(source, translated):
     if not isinstance(translated, str) or not translated.strip(): return ['empty translation']
     errors = []
+    # %% is a literal percent. Do not treat a following conversion as a specifier,
+    # and do not enable the printf space flag: "10% damage" / "100%damage" are prose.
+    printf = r'%%|(?:%(?:\d+\$)?[-+#0]*(?:\d+|\*)?(?:\.(?:\d+|\*))?(?:hh|ll|[hlLjzt])?[diuoxXfFeEgGaAcspn](?![A-Za-z]))'
     patterns = {
         'placeholders': r'(?<!\{)\{[^{}]+\}(?!\})',
-        'printf': r'%(?:\d+\$)?[-+#0]*(?:\d+|\*)?(?:\.(?:\d+|\*))?(?:hh|ll|[hlLjzt])?[diuoxXfFeEgGaAcspn]',
+        'printf': printf,
         'numbers': r'[+-]?\d+(?:\.\d+)?%?',
     }
     for label, pattern in patterns.items():
-        if Counter(re.findall(pattern, source)) != Counter(re.findall(pattern, translated)): errors.append(label)
+        found_s, found_t = re.findall(pattern, source), re.findall(pattern, translated)
+        if label == 'printf':
+            found_s = [item for item in found_s if item != '%%']
+            found_t = [item for item in found_t if item != '%%']
+        if Counter(found_s) != Counter(found_t): errors.append(label)
     if source.count('%') != translated.count('%'): errors.append('percent signs')
     if re.findall(r'\r\n|\r|\n', source) != re.findall(r'\r\n|\r|\n', translated): errors.append('newlines')
     tag = r'<(?:/|/?[A-Za-z][^<>\r\n]*)>'

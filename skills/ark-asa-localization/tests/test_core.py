@@ -73,11 +73,26 @@ class CoreTests(unittest.TestCase):
     def test_translation_guards_numbers_percent_printf_tags_and_newlines(self):
         validate = self.core.translation_errors
         self.assertEqual(validate('Adds +10% damage reduction.', '获得 +10% 伤害减免。'), [])
+        # Percent prose is not a printf specifier, with or without a space before the word.
+        self.assertEqual(validate('10% damage', '10% 伤害'), [])
+        self.assertEqual(validate('100%damage', '100%伤害'), [])
+        self.assertEqual(validate('100%faster', '快 100%'), [])
+        self.assertEqual(validate('Save 100%%', '保存 100%%'), [])
+        self.assertEqual(validate('+10 armor', '+10 护甲'), [])
+        self.assertEqual(validate('Use {{Item}} and {Item}', '使用 {{Item}} 和 {Item}'), [])
+        self.assertEqual(validate('Deal %d damage to %s', '对 %s 造成 %d 伤害'), [])
+        self.assertEqual(validate('%1$s %.2f', '%1$s %.2f'), [])
+        self.assertEqual(validate('<A>1</A><B>2</B>', '<A>1</A><B>2</B>'), [])
+        self.assertEqual(validate('Help', '帮助'), [])
         for source, translated in [
-            ('+10% damage', '+20% 伤害'), ('Hello %s', '你好'),
-            ('{Fire} + {Targeting}', '{Fire}'), ('<RichColor Color="1,0,0">Hi</>', '你好'),
-            ('Line1\r\n\r\nLine2', '行1\n行2')]:
+            ('+10% damage', '+20% 伤害'), ('+10 armor', '10 护甲'), ('-5 health', '5 生命'),
+            ('10% damage', '10％伤害'), ('10% and 10%', '10%'),
+            ('Hello %s', '你好'), ('player1%s', '玩家1'), ('Deal %d damage', '造成伤害'),
+            ('{Fire} + {Targeting}', '{Fire}'), ('Use {Item}', '使用 Item'),
+            ('<RichColor Color="1,0,0">Hi</>', '你好'), ('<A>1</A><B>2</B>', '<B>2</B><A>1</A>'),
+            ('Line1\r\n\r\nLine2', '行1\n行2'), ('Help', '  '), ('Help', '')]:
             self.assertTrue(validate(source, translated), source)
+        self.assertEqual(validate('Help', '   '), ['empty translation'])
 
     def test_only_reviewed_entries_are_selected_and_source_changes_rejected(self):
         data = b'\x1fRotateAttack\0' + struct.pack('<I', 0) + b'\0' + fs('') + fs('A'*32) + fs('Help')
