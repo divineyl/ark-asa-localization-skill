@@ -1,8 +1,9 @@
 ﻿param(
-    [ValidateSet('Install','Uninstall','Detect')][string]$Action = 'Install',
+    [ValidateSet('Install','Uninstall','Detect','Preflight','Rollback')][string]$Action = 'Install',
     [string]$GamePath = '',
     [string]$SteamPath = '',
     [string]$ManifestPath = '',
+    [string]$BackupPath = '',
     [switch]$NonInteractive
 )
 $ErrorActionPreference = 'Stop'
@@ -32,6 +33,68 @@ function Get-Hash([string]$Path) {
     $algorithm = [Security.Cryptography.SHA256]::Create()
     try { return [BitConverter]::ToString($algorithm.ComputeHash($stream)).Replace('-','').ToLowerInvariant() }
     finally { $stream.Dispose(); $algorithm.Dispose() }
+}
+
+function Test-ChildPath([string]$Child, [string]$Parent) {
+    $childPath = [IO.Path]::GetFullPath($Child).TrimEnd('\')
+    $parentPath = [IO.Path]::GetFullPath($Parent).TrimEnd('\')
+    return $childPath.StartsWith($parentPath + '\', [StringComparison]::OrdinalIgnoreCase)
+}
+
+function Test-LocalizationPak([string]$Path) {
+    # 221-byte V11 footer. Offsets match asa_resources: encrypted +16, magic +17,
+    # version +21, index offset +25, index size +33, sha1 +41.
+    $message = '游戏或模组更新很可能使这份汉化补丁失效：_P.pak 不是可读的 V11 容器。没有写入任何文件。'
+    $length = (Get-Item -LiteralPath $Path).Length
+    if ($length -lt 221 -or $length -gt 33554432) { throw $message }
+    $data = [IO.File]::ReadAllBytes($Path)
+    $start = $data.Length - 221
+    if ($data[$start + 16] -ne 0) { throw $message }
+    if ([BitConverter]::ToUInt32($data, $start + 17) -ne 0x5A6F12E1 -or [BitConverter]::ToInt32($data, $start + 21) -ne 11) { throw $message }
+    $indexOffset = [BitConverter]::ToInt64($data, $start + 25)
+    $indexSize = [BitConverter]::ToInt64($data, $start + 33)
+    if ($indexOffset -lt 0 -or $indexSize -le 0 -or ($indexOffset + $indexSize) -gt ($data.Length - 221)) { throw $message }
+    $sha = [Security.Cryptography.SHA1]::Create()
+    try { $actual = $sha.ComputeHash($data, [int]$indexOffset, [int]$indexSize) }
+    finally { $sha.Dispose() }
+    for ($i = 0; $i -lt 20; $i++) {
+        if ($actual[$i] -ne $data[$start + 41 + $i]) { throw $message }
+    }
+}
+
+function Restore-LocalizationBackup([string]$Game) {
+    if (!$BackupPath) { throw '回退需要 -BackupPath，指向某次安装打印的备份目录。没有改动文件。' }
+    $backup = [IO.Path]::GetFullPath($BackupPath)
+    $snapPath = Join-Path $backup 'snapshot.json'
+    if (!(Test-Path -LiteralPath $snapPath -PathType Leaf)) { throw '备份目录里没有 snapshot.json，没有改动文件。' }
+    $items = @(([IO.File]::ReadAllText($snapPath) | ConvertFrom-Json))
+    if (!$items.Count) { throw '备份记录是空的，没有改动文件。' }
+    $plan = @()
+    foreach ($item in $items) {
+        $dest = [IO.Path]::GetFullPath([string]$item.Path)
+        $src = [IO.Path]::GetFullPath([string]$item.Backup)
+        if (!(Test-ChildPath $dest $Game)) { throw ('备份记录指向游戏目录之外，没有改动文件：' + $dest) }
+        if (!(Test-ChildPath $src $backup)) { throw ('备份文件不在备份目录内，没有改动文件：' + $src) }
+        $plan += [pscustomobject]@{ Dest=$dest; Src=$src; Existed=[bool]$item.Existed }
+    }
+    $done = 0
+    foreach ($step in $plan) {
+        try {
+            if ($step.Existed) {
+                if (!(Test-Path -LiteralPath $step.Src -PathType Leaf)) { throw ('缺少备份文件：' + $step.Src) }
+                [void][IO.Directory]::CreateDirectory((Split-Path -Parent $step.Dest))
+                [IO.File]::Copy($step.Src, $step.Dest, $true)
+                if ((Get-Hash $step.Dest) -ne (Get-Hash $step.Src)) { throw ('回退后校验失败：' + $step.Dest) }
+            } elseif (Test-Path -LiteralPath $step.Dest -PathType Leaf) {
+                [IO.File]::Delete($step.Dest)
+            }
+            $done += 1
+        } catch {
+            throw ('回退没有全部完成：' + $_.Exception.Message + '；已处理 ' + $done + ' 个文件；备份仍在：' + $backup + '。这只恢复文件字节，不能证明游戏内显示。')
+        }
+    }
+    Write-Host ('已按备份回退文件：' + $backup)
+    Write-Host '这只恢复当时备份的字节，不能证明 ASA 会加载或显示汉化。'
 }
 
 function Get-GameRoot([string]$Path) {
@@ -232,11 +295,20 @@ function Invoke-Installer {
         }
     }
     Write-Host ('飞升目录：' + $game)
+    if ($Action -eq 'Rollback') {
+        if (Get-Process -Name 'ArkAscended','ArkAscended_BE','ArkAscendedServer' -ErrorAction SilentlyContinue) {
+            throw '请先完全退出飞升客户端和服务器，再运行脚本。'
+        }
+        Restore-LocalizationBackup $game
+        return
+    }
     $mods = @(Find-Mods $game)
+    $VersionMismatch = $false
     foreach ($mod in $mods) {
         Write-Host ('模组 ' + $ModId + '：' + $mod.Path)
         if ($mod.Version -ne $ExpectedVersion) {
-            Write-Warning ('模组版本不同；期望 ' + $ExpectedVersion + '，实际 ' + $mod.Version + '。词条匹配需要重新验证。')
+            $VersionMismatch = $true
+            Write-Warning ('模组版本不同；期望 ' + $ExpectedVersion + '，实际 ' + $mod.Version + '。游戏或模组更新很可能使这份汉化补丁失效，词条需要按新原文重做。')
         }
     }
     if ($Action -ne 'Uninstall' -and !$mods.Count) {
@@ -257,10 +329,12 @@ function Invoke-Installer {
         if ($state.Schema -ne 1 -or $state.GameRoot -ine $game -or $state.PakHash -ne $PakHash -or $state.Target -cne $Target -or $state.ModId -ne $ModId) { throw '已有安装记录不匹配，未修改。' }
     }
     if ($Action -eq 'Uninstall' -and !$state) { Write-Host '没有本工具的安装记录，未修改任何文件。'; return }
-    if ($Action -eq 'Install') {
+    if ($Action -eq 'Install' -or $Action -eq 'Preflight') {
         if (!(Test-Path -LiteralPath $source -PathType Leaf) -or (Get-Hash $source) -ne $PakHash) {
             throw '安装包中的 PAK 丢失或校验不符，请重新解压完整安装包。'
         }
+        # Hash can match a file the game update replaced with an unreadable container.
+        Test-LocalizationPak $source
     }
     $pakExists = Test-Path -LiteralPath $pak -PathType Leaf
     if ($pakExists -and (Get-Hash $pak) -ne $PakHash) { throw '目标位置已有内容不同的同名 PAK，未覆盖。请先将它另行备份。' }
@@ -271,8 +345,18 @@ function Invoke-Installer {
     $ownsPak = !$pakExists
     if ($state) { $ownsPak = (!$pakExists -or [bool]$state.OwnsPak) }
     $newStateText = ''
-    if ($Action -eq 'Install') {
+    if ($Action -eq 'Install' -or $Action -eq 'Preflight') {
         $newStateText = [pscustomobject]@{Schema=1; Target=$Target; ModId=$ModId; GameRoot=$game; PakHash=$PakHash; OwnsPak=$ownsPak; OwnsBlock=$plan.OwnsBlock} | ConvertTo-Json
+        if ($Action -eq 'Preflight') {
+            if ($VersionMismatch) { throw '游戏或模组更新很可能使这份汉化补丁失效：已安装模组版本和补丁记录不一致。没有写入任何文件。离线预检不能证明 ASA 已加载或显示这些译文。' }
+            if ($state -and $pakExists -and $plan.Text -ceq $doc.Text -and $state.OwnsBlock -eq $plan.OwnsBlock) {
+                Write-Host '预检完成，没有写入任何文件。PAK 校验通过，加载路径已存在，安装不会重复修改。'
+            } else {
+                Write-Host '预检完成，没有写入任何文件。安装将会备份现有文件，然后写入 PAK 和 Game.ini 加载路径。'
+            }
+            Write-Host '离线预检不能证明 ASA 已加载或显示这些译文。'
+            return
+        }
         if ($state -and $pakExists -and $plan.Text -ceq $doc.Text -and $state.OwnsBlock -eq $plan.OwnsBlock) {
             Write-Host '已安装，PAK 校验通过，加载路径已存在，无需重复修改。'; return
         }
