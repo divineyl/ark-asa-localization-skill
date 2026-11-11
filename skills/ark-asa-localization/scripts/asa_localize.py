@@ -156,7 +156,7 @@ exit /b %installerExit%
         writer.writerows((r[k] for k in ('namespace','key','source','translation','evidence')) for r in identities)
     note = f'''{mod_name} ({mod_id}) 中文独立小包 · 研究测试版
 模组版本：{mod_version}
-完整解压后，退出飞升，双击 install.bat。detect.bat 仅检测，uninstall.bat 卸载。
+完整解压后，退出飞升，先双击 detect.bat 检测。确认客户端和已安装模组后，再双击 install.bat。uninstall.bat 卸载。
 需先在 Windows Steam 飞升客户端内下载并启用原模组。找到多个客户端时请选择。
 查找失败时粘贴飞升目录，或把该目录拖到 BAT 上。
 安装会备份配置，向 Content/Paks 添加 PAK，在 Saved/Config/Windows/Game.ini 登记 {report['target']}。

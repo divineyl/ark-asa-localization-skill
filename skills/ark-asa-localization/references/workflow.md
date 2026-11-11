@@ -4,7 +4,9 @@
 
 ## 原件与格式
 
-先记录 ZIP 名、大小、SHA-256、CRC、成员相对路径和 `.uplugin`。`inspect-zip` 拒绝路径逃逸、Windows 保留名、大小写重名、符号链接、加密 ZIP 和超限展开量；默认展开总量上限 4 GiB。只写全新输出目录，原 ZIP 不变。体积更大的合法模组可在审查清单后调用 Python API 显式调整 `max_unpacked`，不要盲目提高限制。
+先记录 ZIP 文件名、文件系统上的字节大小，以及 `inspect-zip` 写出的整包 SHA-256。JSON 根上还有 `schema`、`input_name`、`input_sha256`、`extensions`、`has_iostore`、`asa_identity_observed`、`runtime_tested`。每个文件记录只有 `path`、`size`、`sha256`；每条插件记录只有 `path`、`mod_id`、`name`、`version`、`sdk`。CRC 会在读取时校验，失败即拒绝，但不会变成字段，整包大小也不在 JSON 里。
+
+`inspect-zip` 拒绝路径逃逸、Windows 保留名、大小写重名、符号链接、加密 ZIP 和超限展开量；默认展开总量上限 4 GiB。`--output` 和 `--extract` 都必须尚不存在，原 ZIP 不变。命令行没有 `--max-unpacked`。体积更大的合法模组可在审查清单后调用 Python API 显式调整 `max_unpacked`，不要自造参数或盲目提高限制。
 
 `.uplugin.Description` 的 `cf_ugcID`、FriendlyName、VersionName、SDKVersion 是识别线索，不是所有文件都相容的证明；缺字段时不要猜 ID。ASA PAK 内可能只有 AssetRegistry，主体在 IoStore。两个案例的原 PAK 都不是 repak 可直接读的标准 V11 输入；用于输出的小包是另一回事。
 
@@ -24,7 +26,9 @@ retoc.exe unpack "mod.utoc" "work/extracted"
 
 ## 扫描能力及审稿
 
-`inventory` 是只读候选扫描器，不是完整 Unreal 包解析器。输出相对路径、整文件哈希、字节 offset/end、kind、source、可见 namespace/key；默认 `display=false`。
+`inventory` 是只读候选扫描器，不是完整 Unreal 包解析器。它只读取 `.uasset` 和 `.umap`，写出 `schema: 1`、`files`、`entries`、`runtime_tested: false` 和说明用的 `note`。`files[]` 含 `path`、`sha256`、`size`、`layout`：文件头为 `c1832a9e` 时记为 `legacy-unreal-header`，否则为 `unclassified-cooked-chunk`。后一种布局不是 ASE 格式证明。
+
+每条候选含 `path`、`source_sha256`、`offset`、`end`、`kind`、`source`，以及可见的 `namespace`/`key`；默认 `display` 为 JSON 布尔值 `false`。`--output` 必须尚不存在。
 
 - `ftext-base`：有限 flags + Base history 布局；重叠 lookahead 防止连续零字节造成漏检。即使结构匹配，仍须结合上下文确认。
 - `textconst`：受限 ASCII Blueprint LocalizedText 常量候选。
@@ -37,7 +41,9 @@ retoc.exe unpack "mod.utoc" "work/extracted"
 {"display":true,"translation":"切换火炮姿态","review_note":"骑乘按键帮助标签，结合 HUD 上下文确认"}
 ```
 
-这是现有记录上的增补字段，不是完整 plan。禁止删除其 `path/source_sha256/offset/kind/source/namespace/key` 定位信息。`validate-plan` 会重算源件哈希、重新扫描并比对实际位置；嵌在显式文本中的 FString 不可另选为全局 CRC 项。
+这是现有记录上的增补字段，不是完整 plan。`display` 必须是布尔值 `true`；字符串 `"true"` 不会入选。禁止删除其 `path`、`source_sha256`、`offset`、`end`、`kind`、`source`，以及该条已经带有的 `namespace`、`key`。缺少 `translation` 的条目会被跳过；空白译文会报错。若因此没有任何审稿条目，校验失败，不会生成空包。进入构建还需要非空 `review_note`。可选的 `source_hash` 必须是 0 到 4294967295 的整数，并且同时写上非空 `source_hash_origin`。
+
+`validate-plan` 不写新文件。成功时向标准输出打印 `{"reviewed": N}`；可捕获的失败写到标准错误，前缀为 `Error:`。它会重算源件哈希、重新扫描并比对实际位置。以 `/Game/` 或 `/Script/` 开头的原文会被拒绝。嵌在显式文本中的 FString 不可另选为全局 CRC 项。
 
 不要翻译事件/函数、资源路径、配置查找键、对象名、材质参数、刷怪条目名、按键绑定 ID。纯英文不是显示证据；人工 review_note 也不能替代对字段用途的检查。JSON UI 应只改确认的显示值，不改 JSON 键/事件/权限/绑定。
 
