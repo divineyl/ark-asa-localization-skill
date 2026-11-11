@@ -21,7 +21,7 @@ $asaCli = '.\skills\ark-asa-localization\scripts\asa_localize.py'
 基础 ZIP 检查和候选扫描不需要 repak 或 UnrealLocres。执行 `build` / `package` 时需要两者；处理 IoStore 时还可能需要 retoc。
 
 - repak：查看[本项目已验证的 v0.2.3 上游发布页](https://github.com/trumank/repak/releases/tag/v0.2.3)。
-- UnrealLocres：查看[上游仓库](https://github.com/akintos/UnrealLocres)。本项目用其独立导出能力；未确认可再分发许可，因此不附带该程序。
+- UnrealLocres：查看[已核对哈希的 1.1.1 发布标签](https://github.com/akintos/UnrealLocres/releases/tag/1.1.1)。本项目只用其独立导出；未确认可再分发许可，因此不附带该程序。发布标签和程序自己打印的 banner 可能不同，两样都记下来。
 - retoc：查看[本项目已验证的 v0.1.5 上游发布页](https://github.com/trumank/retoc/releases/tag/v0.1.5)。其处理压缩数据时可能另需 Oodle DLL；本项目不分发该 DLL。
 
 这些是历史已验证版本，不是“最新版本”承诺。自行检查来源和许可，将可信程序放在仓库外，或本地忽略的 `local-tools` 目录。不要执行来源不明的下载脚本。
@@ -39,7 +39,7 @@ $asaCli = '.\skills\ark-asa-localization\scripts\asa_localize.py'
   "unreal_locres": {
     "path": "local-tools/UnrealLocres-1.1.1.exe",
     "version": "release-1.1.1",
-    "source_url": "https://github.com/akintos/UnrealLocres",
+    "source_url": "https://github.com/akintos/UnrealLocres/releases/tag/1.1.1",
     "sha256": "替换为实际文件的64位SHA256"
   }
 }
@@ -76,7 +76,7 @@ $asaCli = '.\skills\ark-asa-localization\scripts\asa_localize.py'
 & $asaPython -B $asaCli inspect-zip --input .\work\input\mod.zip --output .\work\source.json --extract .\work\original
 ```
 
-输出包含 ZIP 哈希、CRC、成员和插件信息；`original` 是完整解压副本，原 ZIP 不变。提取目录必须不存在。拒绝路径逃逸、冲突文件名、加密 ZIP、超限展开等输入；默认展开量上限 4 GiB，合法的大模组需要先审查再按[工作流说明](../skills/ark-asa-localization/references/workflow.md)处理。
+输出 JSON 的根字段是 `schema`、`input_name`、`input_sha256`、`files`、`plugins`、`extensions`、`has_iostore`、`asa_identity_observed`、`runtime_tested`。每个文件记录是 `path`、`size`、`sha256`；每条插件记录是 `path`、`mod_id`、`name`、`version`、`sdk`。CRC 在读取时校验，失败就拒绝，但不会写成字段；整包字节大小也不在 JSON 里。`original` 是完整解压副本，原 ZIP 不变。`--output` 和 `--extract` 都必须尚不存在。拒绝路径逃逸、冲突文件名、加密 ZIP、超限展开等输入；默认展开量上限 4 GiB，命令行不能提高它。合法的大模组需要先审查再按[工作流说明](../skills/ark-asa-localization/references/workflow.md)调用 Python API。
 
 根据实际内容选择下一步：
 
@@ -103,7 +103,7 @@ $asaSource = '.\work\extracted'
 & $asaPython -B $asaCli inventory --input $asaSource --output .\work\plan.json
 ```
 
-所有条目最初为 `display: false`。检查上下文后，仅对真正的显示文本添加以下字段，保留原记录的路径、哈希、位置、类型、原文及 namespace/key：
+所有条目最初为布尔值 `display: false`。检查上下文后，仅对真正的显示文本同时写入 `display: true`、译文和 `review_note`。只改 `display` 不会进入构建；字符串 `"true"` 也不会。保留原记录的路径、哈希、位置、类型、原文及已有的 namespace/key：
 
 ```json
 {"display": true, "translation": "帮助", "review_note": "确认这是 HUD 帮助按钮显示文本"}
@@ -115,7 +115,7 @@ $asaSource = '.\work\extracted'
 & $asaPython -B $asaCli validate-plan --source $asaSource --plan .\work\plan.json
 ```
 
-校验会重新检查实际源文件和位置。输出的审稿条数不等于游戏覆盖条数；源文件更新后应重新扫描，不能修改旧哈希绕过检查。
+校验不写新文件。成功时标准输出是 `{"reviewed": N}`，这个数字不等于游戏覆盖条数。失败信息在标准错误，前缀为 `Error:`。它会重新检查实际源文件和位置；源文件更新后应重新扫描，不能修改旧哈希绕过检查。
 
 ## 5. 构建并交付小包
 
@@ -130,7 +130,7 @@ $asaTarget = 'Mod123456'
 & $asaPython -B $asaCli package --build .\work\build-v1 --tools .\tools.json --mod-id $asaModId --mod-version $asaModVersion --mod-name $asaModName --output .\work\delivery-v1
 ```
 
-输出目录必须是新的；重试用 `build-v2` / `delivery-v2`，保留失败输出便于排错。默认只构建审稿后的显式身份。无键文本不会自动变成确定身份；仅在明确研究候选匹配时使用 `--crc-candidates` 或 `--namespace-aliases`，阅读[格式边界](../skills/ark-asa-localization/references/formats.md)并单独统计。
+输出目录必须是新的，目录名不要包含 `.`。`package` 还会在旁边生成把最后一个后缀换成 `.zip` 的压缩包；`delivery.v1` 这类名字会变成 `delivery.zip`，并可能和别的产物撞名。重试用 `build-v2` / `delivery-v2`，保留失败输出便于排错。默认只构建审稿后的显式身份。无键文本不会自动变成确定身份；仅在明确研究候选匹配时使用 `--crc-candidates` 或 `--namespace-aliases`。后者只给空 namespace 的显式键附加 GraphLiteral 别名。阅读[格式边界](../skills/ark-asa-localization/references/formats.md)并单独统计。
 
 `build` 独立导出 LocRes、比较内容、封装 V11 PAK、解包逐字节核对，并检查原件哈希。`package` 会再次验证当前文件，输出 `delivery-v1` 文件夹及 `delivery-v1.zip`，包含 PAK、manifest、安装/卸载/检测入口、译文和离线验证记录。
 
@@ -181,6 +181,6 @@ $asaGamePath = '填写自己的ASA客户端完整路径'
 powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -Action Detect -GamePath $asaGamePath
 ```
 
-确认授权和目标后才把 `Detect` 改为 `Install`。安装器保留备份、编码和自有文件记录；详情见[安装器说明](../skills/ark-asa-localization/references/installer.md)。不要把旧 `Game.ini` 整体覆盖回去，也不要因未命中译文而删除官方 PAK。
+确认授权和目标后才把 `Detect` 改为 `Install`。`install.ps1` 省略 `-Action` 时默认就是 Install，所以不要无参数运行它。安装器保留备份、编码和自有文件记录；详情见[安装器说明](../skills/ark-asa-localization/references/installer.md)。不要把旧 `Game.ini` 整体覆盖回去，也不要因未命中译文而删除官方 PAK。
 
 升级同一模组的小包时，安装记录会核对旧 PAK 哈希，不能用新版清单直接覆盖。保留旧包和备份，获准升级后先用旧包的 `uninstall.bat` 卸载自有内容，再安装新版。若旧文件被手工改过或记录不一致，应先核对差异，不删除记录来绕过保护。

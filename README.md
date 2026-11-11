@@ -13,6 +13,8 @@
 
 这不是《方舟：生存进化》（ASE）的旧版资产修补工具，也不改玩法逻辑。安装器面向 Windows Steam ASA 客户端；其他商店、主机版、服务器部署不在已验证范围。扫描器不是完整 Unreal 解析器，CRC 与命名空间别名仅是候选匹配。
 
+脚本还有几条不会通融的限制：写出的文件和目录必须尚不存在；不自动下载外部工具；`display` 必须是布尔值 `true`，并同时带译文和 `review_note`；`runtime_tested` 保持 `false`；`install.ps1` 省略 `-Action` 时会直接安装。完整列表在[技能说明](skills/ark-asa-localization/SKILL.md)。
+
 ## 在 Codex 中安装
 
 将下面这段发送给 Codex：
@@ -62,6 +64,23 @@
 - [历史案例证据](skills/ark-asa-localization/references/evidence.md)与[本地验证记录](skills/ark-asa-localization/references/validation-results.json)
 - [GitHub Actions](https://github.com/divineyl/ark-asa-localization-skill/actions)
 - [v0.1.0-alpha.1 发布验证记录](docs/release-validation.md)
+
+## 文档地图
+
+仓库给人看，技能包给 Codex 用。安装 skill 时只有 `skills/ark-asa-localization`，下面带 `docs/` 的页面不会一起装进技能目录。
+
+- 想自己敲命令：看[快速上手](docs/quickstart.md)。
+- 想把任务交给 Codex：复制[使用提示词](docs/usage-prompts.md)。
+- 想知道技能会怎么走、哪里必须停：看 [SKILL.md](skills/ark-asa-localization/SKILL.md)。
+- 审稿字段和扫描范围：[workflow.md](skills/ark-asa-localization/references/workflow.md)。
+- 身份、LocRes 和实验边界：[formats.md](skills/ark-asa-localization/references/formats.md)。
+- 工具版本与 SHA-256：[provenance.md](skills/ark-asa-localization/references/provenance.md)。
+- 安装、卸载和所有权：[installer.md](skills/ark-asa-localization/references/installer.md)。
+- 离线测试与游戏实测清单：[validation.md](skills/ark-asa-localization/references/validation.md)。
+- 两个历史案例：[evidence.md](skills/ark-asa-localization/references/evidence.md)。
+- 改脚本或文档之前：看[贡献指南](CONTRIBUTING.md)。
+
+技能包内部是固定分工：`SKILL.md` 只留路线和约束；格式与条件放 `references/`；重复的文件处理放 `scripts/`。`asa_core.py` 只用标准库，`asa_resources.py` 负责语言资源，`asa_localize.py` 是命令入口，`install.ps1` 随用户交付包分发。
 
 ## 开源与贡献
 

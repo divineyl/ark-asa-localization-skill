@@ -29,6 +29,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -Action Uninst
 
 `-NonInteractive` 用于自动化；无法唯一定位时返回失败，不猜第一个客户端。`-SteamPath` 可指定 Steam 根目录，`-ManifestPath` 可显式指定清单；payload 仍从脚本所在包目录读取。BAT 可双击或接收拖入的目录；脚本 Bypass 仅用于本次进程，不修改持久执行策略，也不自动提权。
 
+省略 `-Action` 时默认值是 `Install`，不是检测。未获授权不要运行脚本；获授权后，命令行也必须先写 `-Action Detect`。不要因为无参数调用看起来像“只是打开脚本”就执行它。清单里的 `pak_sha256` 必须是小写十六进制，构建器写出的就是小写；大写会被安装器拒绝。
+
 ## 检测与修改范围
 
 - 查注册表、libraryfolders.vdf、appmanifest_2399830 和常见库目录，不递归扫描整块磁盘。

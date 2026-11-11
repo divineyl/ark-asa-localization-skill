@@ -91,6 +91,14 @@ class CoreTests(unittest.TestCase):
         selected = self.core.reviewed_records(src, plan)
         self.assertEqual({r['source'] for r in selected}, {'Help'})
         self.assertEqual(selected[0]['key'], 'A'*32)
+        skipped = dict(help_row)
+        skipped.pop('translation')
+        with self.assertRaisesRegex(ValueError, 'No reviewed display translations'):
+            self.core.reviewed_records(src, {'schema':1, 'entries':[skipped]})
+        skipped['translation'] = '帮助'
+        skipped['display'] = 'true'
+        with self.assertRaisesRegex(ValueError, 'No reviewed display translations'):
+            self.core.reviewed_records(src, {'schema':1, 'entries':[skipped]})
         (src / 'HUD.uasset').write_bytes(data + b'changed')
         with self.assertRaises(ValueError): self.core.reviewed_records(src, plan)
 

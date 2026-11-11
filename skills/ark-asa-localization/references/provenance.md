@@ -26,7 +26,7 @@
   "unreal_locres": {
     "path":"X:/tools/UnrealLocres-1.1.1.exe",
     "version":"release-1.1.1",
-    "source_url":"https://github.com/akintos/UnrealLocres",
+    "source_url":"https://github.com/akintos/UnrealLocres/releases/tag/1.1.1",
     "sha256":"b961927f92a8bca928d378a8430e5ea36fed300500b228b184b8d6b61ebb22a1"
   }
 }

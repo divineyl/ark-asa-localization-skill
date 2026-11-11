@@ -5,7 +5,7 @@
 ## 本地执行结果
 
 - skill-creator `quick_validate.py`：通过。
-- `python -B tools/verify_repo.py --full --require-no-skips`：31 项通过，0 失败、0 错误、0 跳过。其中 skill 行为测试 24 项，公开仓库与发布工具测试 7 项。
+- `python -B tools/verify_repo.py --full --require-no-skips`：31 项通过，0 失败、0 错误、0 跳过。其中 skill 行为测试 24 项，公开仓库与发布工具测试 7 项。这是当天的计数；后来新增的检查不回写本页。
 - 外部工具使用 repak v0.2.3、UnrealLocres 1.1.1；独立读取、PAK 封装回读和已打包 BAT 的检测/安装/卸载均实际执行。
 - 在相同源码上构建两份发布 ZIP，成员内容、CRC 和整个 ZIP 的 SHA-256 一致。
 - 模拟客户端均为临时目录；没有修改真实游戏目录。ZIP 仅包含 skill 源码、参考文档、测试和许可文件。
