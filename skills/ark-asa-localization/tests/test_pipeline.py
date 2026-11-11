@@ -82,4 +82,103 @@ class PipelineTests(unittest.TestCase):
                 asa_localize.package_build(work / 'build', work / 'wrong', tools, 123456, 'fixture-v1', 'Demo')
 
 
+class PatchApplySafetyTests(unittest.TestCase):
+    def setUp(self):
+        import asa_localize
+        import asa_resources
+        self.localize = asa_localize
+        self.resources = asa_resources
+        self.tmp = tempfile.TemporaryDirectory(prefix='asa-patch-')
+        self.addCleanup(self.tmp.cleanup)
+        self.work = Path(self.tmp.name)
+
+    def _locres(self, source, translation, key):
+        return self.resources.encode_locres([
+            dict(namespace='UI', key=key, source=source, translation=translation, evidence='observed-key')])
+
+    def test_unreadable_export_and_apply_write_nothing(self):
+        source = self.work / 'patch'
+        source.mkdir()
+        (source / 'old.locres').write_bytes(b'truncated-after-a-game-update')
+        dest = self.work / 'dest'
+        dest.mkdir()
+        kept = self._locres('Help', '旧', 'HelpKey')
+        (dest / 'old.locres').write_bytes(kept)
+        with self.assertRaisesRegex(self.resources.PatchStaleError, 'No files were written'):
+            self.localize.apply_patch(source, dest, self.work / 'backups')
+        self.assertEqual((dest / 'old.locres').read_bytes(), kept)
+        self.assertFalse((self.work / 'backups').exists())
+        exported = self.work / 'export.csv'
+        with self.assertRaisesRegex(self.resources.PatchStaleError, 'Game update likely invalidated'):
+            self.localize.export_patch(source / 'old.locres', exported)
+        self.assertFalse(exported.exists())
+        script = ROOT / 'scripts' / 'asa_localize.py'
+        result = subprocess.run([sys.executable, '-B', str(script), 'preflight', '--input', str(source / 'old.locres')],
+                                capture_output=True, text=True, encoding='utf-8')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Game update likely invalidated', result.stderr)
+        self.assertNotIn('Traceback', result.stderr)
+        self.assertIn('Offline checks do not show', result.stderr)
+
+    def test_apply_backs_up_and_failed_write_rolls_back(self):
+        source = self.work / 'patch'
+        nested = source / 'nested'
+        nested.mkdir(parents=True)
+        new_a = self._locres('Help', '帮助', 'HelpKey')
+        new_b = self._locres('Open', '打开', 'OpenKey')
+        (source / 'a.locres').write_bytes(new_a)
+        (nested / 'b.locres').write_bytes(new_b)
+        dest = self.work / 'dest'
+        dest.mkdir()
+        old_a = self._locres('Help', '旧帮助', 'HelpKey')
+        (dest / 'a.locres').write_bytes(old_a)
+        (dest / 'nested').write_bytes(b'not-a-directory')
+        with self.assertRaisesRegex(self.resources.PatchStaleError, 'Previous files were restored') as caught:
+            self.localize.apply_patch(source, dest, self.work / 'backups')
+        self.assertIn('Backup kept at', str(caught.exception))
+        self.assertIn('do not show that ASA loads', str(caught.exception))
+        self.assertEqual((dest / 'a.locres').read_bytes(), old_a)
+        self.assertEqual((dest / 'nested').read_bytes(), b'not-a-directory')
+        self.assertFalse((dest / 'nested' / 'b.locres').exists())
+        self.assertEqual(len(list((self.work / 'backups').iterdir())), 1)
+
+    def test_dry_run_partial_stale_apply_and_explicit_rollback(self):
+        source = self.work / 'patch'
+        source.mkdir()
+        combined = self.resources.encode_locres([
+            dict(namespace='UI', key='HelpKey', source='Help', translation='帮助', evidence='observed-key'),
+            dict(namespace='UI', key='OpenKey', source='Open', translation='打开', evidence='observed-key'),
+        ])
+        (source / 'ui.locres').write_bytes(combined)
+        (self.work / 'current.json').write_text(json.dumps({'sources': ['Help']}), encoding='utf-8')
+        dest = self.work / 'dest'
+        dest.mkdir()
+        previous = self._locres('Help', '以前', 'HelpKey')
+        (dest / 'ui.locres').write_bytes(previous)
+        preview = self.localize.apply_patch(source, dest, dry_run=True, current=self.work / 'current.json')
+        self.assertTrue(preview['dry_run'])
+        self.assertFalse(preview['runtime_tested'])
+        self.assertTrue(preview['partially_stale'])
+        self.assertIsNone(preview['backup'])
+        self.assertEqual((dest / 'ui.locres').read_bytes(), previous)
+        self.assertFalse((self.work / 'backups').exists())
+        applied = self.localize.apply_patch(source, dest, self.work / 'backups', current=self.work / 'current.json')
+        self.assertFalse(applied['runtime_tested'])
+        self.assertEqual((dest / 'ui.locres').read_bytes(), combined)
+        self.assertIn('not evidence', applied['note'])
+        (dest / 'ui.locres').write_bytes(b'user-edit-after-apply')
+        restored = self.localize.rollback_patch(applied['backup'], dest)
+        self.assertEqual(restored['restored'], ['ui.locres'])
+        self.assertFalse(restored['runtime_tested'])
+        self.assertIn('does not show that ASA loads', restored['note'])
+        self.assertEqual((dest / 'ui.locres').read_bytes(), previous)
+        saved = Path(applied['backup']) / 'files' / 'ui.locres'
+        saved.unlink()
+        (dest / 'ui.locres').write_bytes(combined)
+        with self.assertRaisesRegex(self.resources.PatchStaleError, 'Rollback incomplete') as caught:
+            self.localize.rollback_patch(applied['backup'], dest)
+        self.assertIn(str(applied['backup']), str(caught.exception))
+        self.assertEqual((dest / 'ui.locres').read_bytes(), combined)
+
+
 if __name__ == '__main__': unittest.main()

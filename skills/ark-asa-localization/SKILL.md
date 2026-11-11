@@ -36,6 +36,10 @@ python -B scripts/asa_localize.py inventory --input "work/extracted" --output "w
 python -B scripts/asa_localize.py validate-plan --source "work/extracted" --plan "work/plan.json"
 python -B scripts/asa_localize.py build --source "work/extracted" --plan "work/plan.json" --target Mod123456 --tools "tools.json" --output "work/build"
 python -B scripts/asa_localize.py package --build "work/build" --tools "tools.json" --mod-id 123456 --mod-version "observed-version" --mod-name "Example" --output "work/delivery"
+python -B scripts/asa_localize.py preflight --input "work/patch" --current "work/plan.json"
+python -B scripts/asa_localize.py export --input "work/patch/zh.locres" --output "work/export.csv"
+python -B scripts/asa_localize.py apply --input "work/patch" --dest "work/staged" --backup "work/backups"
+python -B scripts/asa_localize.py rollback --backup "work/backups/BACKUP_ID" --dest "work/staged"
 ```
 
 `original` 为完整解压副本；`extracted` 是已解出的 cooked chunks。若 ZIP 内已有 `.uasset`，可直接对相应原件目录扫描；若只有 IoStore，先按工具参考解包。审稿时仅在确认显示项上添加 `display: true`、`translation`、`review_note`，保留定位字段和原文。无需翻译所有提取结果。
