@@ -153,13 +153,20 @@ def inventory(root):
 def translation_errors(source, translated):
     if not isinstance(translated, str) or not translated.strip(): return ['empty translation']
     errors = []
+    # %% is a literal percent. Do not treat a following conversion as a specifier,
+    # and do not enable the printf space flag: "10% damage" / "100%damage" are prose.
+    printf = r'%%|(?:%(?:\d+\$)?[-+#0]*(?:\d+|\*)?(?:\.(?:\d+|\*))?(?:hh|ll|[hlLjzt])?[diuoxXfFeEgGaAcspn](?![A-Za-z]))'
     patterns = {
         'placeholders': r'(?<!\{)\{[^{}]+\}(?!\})',
-        'printf': r'%(?:\d+\$)?[-+#0]*(?:\d+|\*)?(?:\.(?:\d+|\*))?(?:hh|ll|[hlLjzt])?[diuoxXfFeEgGaAcspn]',
+        'printf': printf,
         'numbers': r'[+-]?\d+(?:\.\d+)?%?',
     }
     for label, pattern in patterns.items():
-        if Counter(re.findall(pattern, source)) != Counter(re.findall(pattern, translated)): errors.append(label)
+        found_s, found_t = re.findall(pattern, source), re.findall(pattern, translated)
+        if label == 'printf':
+            found_s = [item for item in found_s if item != '%%']
+            found_t = [item for item in found_t if item != '%%']
+        if Counter(found_s) != Counter(found_t): errors.append(label)
     if source.count('%') != translated.count('%'): errors.append('percent signs')
     if re.findall(r'\r\n|\r|\n', source) != re.findall(r'\r\n|\r|\n', translated): errors.append('newlines')
     tag = r'<(?:/|/?[A-Za-z][^<>\r\n]*)>'
@@ -168,11 +175,13 @@ def translation_errors(source, translated):
 
 
 def reviewed_records(root, plan):
+    import asa_resources as resources
     if plan.get('schema') != 1: raise ValueError('Plan schema must be 1')
     root = Path(root).resolve()
     caches, result = {}, []
     for row in plan['entries']:
-        if row.get('display') is not True or 'translation' not in row: continue
+        if row.get('display') is not True: continue
+        if 'translation' not in row: raise ValueError('Display entries require a translation')
         if not str(row.get('review_note', '')).strip(): raise ValueError('Display review_note required')
         if 'source_hash' in row and not str(row.get('source_hash_origin', '')).strip():
             raise ValueError('An externally observed source_hash requires source_hash_origin')
@@ -194,6 +203,7 @@ def reviewed_records(root, plan):
         if row['kind'] in ('fstring', 'stringconst') and any(
             r.get('key') and r['offset'] <= row['offset'] < r['end'] for r in observed):
             raise ValueError('Select enclosing keyed text, not its nested string')
+        resources.fingerprint(row)
         result.append(row)
     if not result: raise ValueError('No reviewed display translations')
     return result

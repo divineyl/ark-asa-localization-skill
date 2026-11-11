@@ -37,7 +37,7 @@ retoc.exe unpack "mod.utoc" "work/extracted"
 {"display":true,"translation":"切换火炮姿态","review_note":"骑乘按键帮助标签，结合 HUD 上下文确认"}
 ```
 
-这是现有记录上的增补字段，不是完整 plan。禁止删除其 `path/source_sha256/offset/kind/source/namespace/key` 定位信息。`validate-plan` 会重算源件哈希、重新扫描并比对实际位置；嵌在显式文本中的 FString 不可另选为全局 CRC 项。
+这是现有记录上的增补字段，不是完整 plan。禁止删除其 `path/source_sha256/offset/kind/source/namespace/key` 定位信息。只把 `display` 设为 true 却没有 `translation` 会在审稿时失败，不能静默跳过。`validate-plan` 会重算源件哈希、重新扫描并比对实际位置；嵌在显式文本中的 FString 不可另选为全局 CRC 项。非 ASCII 原文还要在这时带上已观察的 `source_hash` 与 `source_hash_origin`。
 
 不要翻译事件/函数、资源路径、配置查找键、对象名、材质参数、刷怪条目名、按键绑定 ID。纯英文不是显示证据；人工 review_note 也不能替代对字段用途的检查。JSON UI 应只改确认的显示值，不改 JSON 键/事件/权限/绑定。
 
@@ -45,7 +45,7 @@ retoc.exe unpack "mod.utoc" "work/extracted"
 
 ## 文本校验与漏项
 
-保留数字及正负号、百分比、printf/命名占位符、富文本标签顺序、CRLF/换行数量。`10% damage` 不能被识别成 `% d`；校验器宁可报告需人工处理的差异，也不自动改玩法数值。还应人工检查不影响 token 的必要空格、语气和布局。
+保留数字及正负号、百分比、printf/命名占位符、富文本标签顺序、CRLF/换行数量。`10% damage` 不能被识别成 `% d`，百分号紧贴英文单词（如 `100%damage`）也不能当成 printf；不启用 printf 空格 flag，`%%` 视为字面百分号。校验器宁可报告需人工处理的差异，也不自动改玩法数值。占位符与 printf 按多重集合比较，译文可以调整语序；富文本标签和换行仍要求顺序一致。还应人工检查不影响 token 的必要空格、语气和布局。
 
 `parse_jsonc` 用字符串状态处理注释和尾逗号；注释用空白替换，避免 `1/*x*/2` 变成 12；保留引号中的 `//`、`/*`、`,]`。对不合法内容报错，禁止正则盲删后当成合法配置。
 

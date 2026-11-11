@@ -38,6 +38,10 @@ def fingerprint(row):
     value = row.get('source_hash')
     if value is None: return source_hash(row['source'])
     if type(value) is not int or not 0 <= value <= 0xffffffff: raise ValueError('Invalid source_hash')
+    # ASCII CRC is case-verified. A hand-filled hash must match it; only non-ASCII
+    # source text may carry an independently observed hash that this tool cannot recompute.
+    if row['source'].isascii() and value != source_hash(row['source']):
+        raise ValueError('ASCII source_hash does not match the case-verified CRC32')
     return value
 
 
@@ -137,6 +141,7 @@ def decode_locres(data):
         for _ in range(count):
             kh, key, sh, index = reader.number('I'), reader.string(), reader.number('I'), reader.number('i')
             if not 0 <= index < len(strings): raise ValueError('String table index')
+            if nh != key_hash(ns) or kh != key_hash(key): raise ValueError('Identity fingerprint mismatch')
             identity = (ns, key)
             if identity in result: raise ValueError('Duplicate identity')
             result[identity] = dict(namespace_hash=nh, key_hash=kh, source_hash=sh, text=strings[index][0])
