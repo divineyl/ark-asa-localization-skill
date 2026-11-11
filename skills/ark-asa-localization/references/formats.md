@@ -6,7 +6,7 @@
 
 本工具的 v3 key hash 使用外部 CityHash64 对 UTF-16LE（无终止符）计算，折叠为 `(low32 + high32 * 23) & 0xffffffff`；空串返回 0。已与两个案例及 50,332 个基线身份的原有 key/namespace hash 比较。
 
-ASCII 源指纹采用 CRC32(UTF-32LE)，与案例使用的原文指纹一致。脚本对非 ASCII 源拒绝自动计算，避免将未经核对的 Unicode/TCHAR 规则冒充证据。确有独立读取的原始资源指纹时，在 plan 记录 `source_hash`（uint32）与 `source_hash_origin`（资源/条目出处），并重新校验；不要将 arbitrary 手填值称为 observed。
+ASCII 源指纹采用 CRC32(UTF-32LE)，与案例使用的原文指纹一致。脚本对非 ASCII 源拒绝自动计算，避免将未经核对的 Unicode/TCHAR 规则冒充证据。确有独立读取的原始资源指纹时，在 plan 记录 `source_hash`（uint32）与 `source_hash_origin`（资源/条目出处），并重新校验；不要将 arbitrary 手填值称为 observed。审稿会立刻套用同一条规则：ASCII 原文附带的 `source_hash` 必须等于该 CRC；非 ASCII 原文若没有这对字段，在审稿阶段失败，不能拖到构建。
 
 `make_identities` 默认只收显式键。显式启用候选时：
 

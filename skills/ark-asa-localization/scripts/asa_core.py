@@ -175,11 +175,13 @@ def translation_errors(source, translated):
 
 
 def reviewed_records(root, plan):
+    import asa_resources as resources
     if plan.get('schema') != 1: raise ValueError('Plan schema must be 1')
     root = Path(root).resolve()
     caches, result = {}, []
     for row in plan['entries']:
-        if row.get('display') is not True or 'translation' not in row: continue
+        if row.get('display') is not True: continue
+        if 'translation' not in row: raise ValueError('Display entries require a translation')
         if not str(row.get('review_note', '')).strip(): raise ValueError('Display review_note required')
         if 'source_hash' in row and not str(row.get('source_hash_origin', '')).strip():
             raise ValueError('An externally observed source_hash requires source_hash_origin')
@@ -201,6 +203,7 @@ def reviewed_records(root, plan):
         if row['kind'] in ('fstring', 'stringconst') and any(
             r.get('key') and r['offset'] <= row['offset'] < r['end'] for r in observed):
             raise ValueError('Select enclosing keyed text, not its nested string')
+        resources.fingerprint(row)
         result.append(row)
     if not result: raise ValueError('No reviewed display translations')
     return result
