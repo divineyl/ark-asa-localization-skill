@@ -1,4 +1,4 @@
 interface:
   display_name: "方舟飞升模组汉化"
   short_description: "提取飞升模组文本，制作可核验小包，并区分离线证据与游戏实测"
-  default_prompt: "使用 $ark-asa-localization 检查模组资源并制作保留验证边界的中文汉化包。"
+  default_prompt: "使用 $ark-asa-localization 检查 Windows Steam 版 ASA 模组，审稿后只制作研究测试版中文小包。保留显式键、数值和占位符；不下载外部程序；不修改真实游戏；没有客户端实测时保持 runtime_tested=false。"

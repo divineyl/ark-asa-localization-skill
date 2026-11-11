@@ -146,6 +146,35 @@ class ReleaseToolTests(unittest.TestCase):
             z.writestr('two/repak.exe', data)
         with self.assertRaises(ValueError): setup.extract_payload(ambiguous.getvalue(), 'repak.exe')
 
+    def test_skill_prompt_keeps_routing_cues_and_cli_constraints(self):
+        skill = (ROOT / 'skills/ark-asa-localization/SKILL.md').read_text(encoding='utf-8')
+        description = json.loads(skill.split('---', 2)[1].split('description:', 1)[1].strip())
+        self.assertGreaterEqual(len(description), 10)
+        self.assertLessEqual(len(description), 1024)
+        self.assertNotIn('<', description)
+        self.assertNotIn('>', description)
+        for cue in ('ASA', '方舟：生存飞升', '汉化', 'LocRes', 'ASE', '方舟：生存进化'):
+            self.assertIn(cue, description)
+        for constraint in (
+            'runtime_tested=false',
+            '--max-unpacked',
+            '4 GiB',
+            '{"reviewed": N}',
+            '-Action Detect',
+            'review_note',
+            '不自动下载',
+            'delivery.v1',
+        ):
+            self.assertIn(constraint, skill)
+        prompt = (ROOT / 'skills/ark-asa-localization/agents/openai.yaml').read_text(encoding='utf-8')
+        self.assertIn('runtime_tested=false', prompt)
+        self.assertIn('不修改真实游戏', prompt)
+        note = (ROOT / 'skills/ark-asa-localization/scripts/asa_localize.py').read_text(encoding='utf-8')
+        self.assertIn('先双击 detect.bat', note)
+        self.assertNotIn("add_argument('--max-unpacked'", note)
+        installer = (ROOT / 'skills/ark-asa-localization/scripts/install.ps1').read_text(encoding='utf-8')
+        self.assertIn("[string]$Action = 'Install'", installer)
+
 
 if __name__ == '__main__':
     unittest.main()
