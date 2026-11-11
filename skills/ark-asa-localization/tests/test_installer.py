@@ -5,10 +5,13 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'scripts'))
+import asa_resources
 PS = Path(os.environ.get('SystemRoot', r'C:\Windows')) / 'System32/WindowsPowerShell/v1.0/powershell.exe'
 
 
@@ -23,7 +26,9 @@ class InstallerTests(unittest.TestCase):
         self.package.mkdir()
         shutil.copyfile(ROOT / 'scripts/install.ps1', self.package / 'install.ps1')
         self.target = 'Demo123456'
-        self.payload = b'fixture payload; tests installer effects, not PAK loading'
+        self.payload = asa_resources.encode_v11_pak({
+            'fixture/payload.txt': b'fixture payload; tests installer effects, not PAK loading',
+        })
         self.name = 'ShooterGame-Windows_Demo123456_P.pak'
         (self.package / self.name).write_bytes(self.payload)
         self.manifest = dict(schema=1, mod_id=123456, mod_name='Demo', mod_version='fixture-v1', target=self.target,
@@ -194,6 +199,62 @@ if ($LASTEXITCODE) {exit $LASTEXITCODE}
         self.run_installer('Uninstall')
         self.assertIn(self.line, self.ini.read_text(encoding='utf-8-sig'))
         self.assertEqual(self.pak.read_bytes(), self.payload)
+
+    def test_preflight_writes_nothing_and_rollback_restores_the_backup(self):
+        old = b'[Other]\r\nValue=keep\r\n'
+        self.ini.write_bytes(old)
+        preview = self.run_installer('Preflight')
+        self.assertIn('没有写入任何文件', preview.stdout)
+        self.assertIn('离线预检不能证明', preview.stdout)
+        self.assertFalse(self.pak.exists())
+        self.assertEqual(self.ini.read_bytes(), old)
+        self.run_installer()
+        snapshot = next((self.game / 'ShooterGame/Saved/LocalizationBackups/Demo123456').glob('*/snapshot.json'))
+        self.run_installer('Rollback', ['-BackupPath', str(snapshot.parent)])
+        self.assertEqual(self.ini.read_bytes(), old)
+        self.assertFalse(self.pak.exists())
+        self.assertTrue(snapshot.is_file())
+
+    def test_unreadable_pak_and_version_mismatch_stop_before_writing(self):
+        plugin = self.mod / 'Demo.uplugin'
+        plugin.write_text(json.dumps({'Description': 'Demo &cf_ugcID=123456', 'VersionName': 'after-update'}), encoding='utf-8')
+        refused = self.run_installer('Preflight', ok=False)
+        self.assertIn('很可能使这份汉化补丁失效', refused.stdout)
+        self.assertFalse(self.pak.exists())
+        self.assertFalse(self.ini.exists())
+        self.run_installer()
+        self.assertEqual(self.pak.read_bytes(), self.payload)
+        self.run_installer('Uninstall')
+        ini_after_uninstall = self.ini.read_bytes()
+        backups = sorted(path.relative_to(self.game).as_posix()
+                         for path in (self.game / 'ShooterGame/Saved/LocalizationBackups').rglob('*'))
+        bad = b'not-a-v11-pak'
+        (self.package / self.name).write_bytes(bad)
+        self.manifest['pak_sha256'] = hashlib.sha256(bad).hexdigest()
+        self.save_manifest()
+        failed = self.run_installer(ok=False)
+        self.assertIn('不是可读的 V11 容器', failed.stdout)
+        self.assertIn('没有写入任何文件', failed.stdout)
+        self.assertFalse(self.pak.exists())
+        self.assertEqual(self.ini.read_bytes(), ini_after_uninstall)
+        self.assertEqual(sorted(path.relative_to(self.game).as_posix()
+                                for path in (self.game / 'ShooterGame/Saved/LocalizationBackups').rglob('*')), backups)
+        missing = self.run_installer('Rollback', ['-BackupPath', str(self.work / 'missing-backup')], ok=False)
+        self.assertIn('snapshot.json', missing.stdout)
+        self.assertFalse(self.pak.exists())
+
+
+class InstallerPatchSafetyTests(unittest.TestCase):
+    def test_installer_names_preflight_rollback_and_a_stale_patch_message(self):
+        text = (ROOT / 'scripts/install.ps1').read_text(encoding='utf-8')
+        self.assertIn("[string]$Action = 'Install'", text)
+        self.assertIn("'Preflight'", text)
+        self.assertIn("'Rollback'", text)
+        self.assertIn('游戏或模组更新很可能使这份汉化补丁失效', text)
+        self.assertIn('不是可读的 V11 容器', text)
+        self.assertIn('没有写入任何文件', text)
+        self.assertIn('离线预检不能证明', text)
+        self.assertIn('这只恢复当时备份的字节，不能证明 ASA 会加载或显示汉化。', text)
 
 
 if __name__ == '__main__': unittest.main()
