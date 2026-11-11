@@ -11,16 +11,16 @@ $PackageRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 if (!$ManifestPath) { $ManifestPath = Join-Path $PackageRoot 'manifest.json' }
 try {
     $Manifest = [IO.File]::ReadAllText([IO.Path]::GetFullPath($ManifestPath)) | ConvertFrom-Json
-    if ($Manifest.schema -ne 1 -or [string]$Manifest.mod_id -notmatch '^[1-9][0-9]{0,11}$') { throw 'Invalid manifest schema or mod_id.' }
+    if ($Manifest.schema -ne 1 -or [string]$Manifest.mod_id -notmatch '^[1-9][0-9]{0,11}$') { throw 'schema 或 mod_id 无效。' }
     $Target = [string]$Manifest.target
-    if ($Target -cnotmatch '^[A-Za-z][A-Za-z0-9_]{2,47}$' -or $Target -in @('Engine','ShooterGame')) { throw 'Invalid localization target.' }
+    if ($Target -cnotmatch '^[A-Za-z][A-Za-z0-9_]{2,47}$' -or $Target -in @('Engine','ShooterGame')) { throw '本地化目标无效。' }
     $PakName = [string]$Manifest.pak_name
-    if ($PakName -cnotmatch '^[A-Za-z0-9_.-]+_P\.pak$' -or $PakName.IndexOf($Target,[StringComparison]::OrdinalIgnoreCase) -lt 0) { throw 'PAK basename must include the target and end in _P.pak.' }
+    if ($PakName -cnotmatch '^[A-Za-z0-9_.-]+_P\.pak$' -or $PakName.IndexOf($Target,[StringComparison]::OrdinalIgnoreCase) -lt 0) { throw 'PAK 文件名必须包含目标并以 _P.pak 结尾。' }
     $PakHash = [string]$Manifest.pak_sha256
-    if ($PakHash -cnotmatch '^[a-f0-9]{64}$') { throw 'Invalid PAK SHA256.' }
+    if ($PakHash -cnotmatch '^[a-f0-9]{64}$') { throw 'PAK SHA256 无效。' }
     $ModId = [string]$Manifest.mod_id
     $ExpectedVersion = [string]$Manifest.mod_version
-    if (!$ExpectedVersion) { throw 'mod_version is required.' }
+    if (!$ExpectedVersion) { throw '必须提供 mod_version。' }
 } catch { Write-Host ('清单错误：' + $_.Exception.Message) -ForegroundColor Red; exit 1 }
 $TargetPath = '../../../ShooterGame/Content/Localization/' + $Target
 $DefaultPath = '../../../ShooterGame/Content/Localization/ShooterGame'
@@ -213,7 +213,7 @@ function Invoke-Installer {
     $game = ''
     if ($GamePath) {
         $game = Get-GameRoot $GamePath
-        if (!$game) { throw '指定目录不是 Steam Windows 飞升客户端：需有 ArkAscended.exe 和 Content\Paks。不会安装到进化或独立服务器。' }
+        if (!$game) { throw '指定目录不是 Steam Windows 飞升客户端：需有 ArkAscended.exe 或 ArkAscended_BE.exe，以及 Content\Paks。不会安装到进化或独立服务器。' }
     } else {
         $games = @(Find-Games)
         if ($games.Count -eq 1) { $game = $games[0] }

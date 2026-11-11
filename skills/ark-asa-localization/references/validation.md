@@ -13,10 +13,10 @@ $env:ASA_TEST_TOOLS = "X:\work\tools.json"
 
 不设置 ASA_TEST_TOOLS 时，外部独立工具整链测试会明确 skip；不能将它称为已通过。Windows PowerShell 安装器测试仅在 Windows 运行，其他系统 skip。所有游戏文件为 temporary fixtures，没有真实安装授权需求。
 
-- core：危险 ZIP/CRC、原件不变、重叠 FText、Unicode Base text、审查定位与源件变化、JSONC 字符串和注释、数值/百分号/标签/占位符。
-- resources：真实案例源 CRC 向量、显式身份保留、候选计数、冲突拒绝、中文/emoji UTF-16 回读、截断和元数据。
-- installer：真实 PowerShell 进程操作临时目录，测试 Steam、手工内部路径、多客户端交互、缺模组/错误游戏/哈希异常、配置编码、已有所有权、反复安装、失败回退和多目标共存。
-- pipeline：从临时原件扫描→人工标记 fixture→资源构建→UnrealLocres 导出→repak list/unpack→交付 ZIP→实际 BAT 检测/安装/卸载，检查效果而非 grep 源码。
+- core：危险 ZIP/CRC、加密包、展开上限、插件 ID 边界与 IoStore 配对、原件不变、重叠 FText、Unicode Base text、Blueprint textconst、嵌套字符串与资源路径拒绝、ASCII/非 ASCII 源指纹复核、JSONC 字符串和注释、数值/正负号/百分号散文/printf/`%%`/标签顺序/占位符。
+- resources：案例源 CRC 与 key hash 向量、显式身份保留、CRC 命名空间、无键冲突、中文/emoji UTF-16 回读、身份哈希被改后的拒绝、截断、保留目标名和 en/zh/zh-Hans 元数据。
+- installer：真实 PowerShell 进程操作临时目录，测试 Steam、手工内部路径、多客户端交互、BattlEye 与独立服务器目录、缺模组/更长模组 ID/错误游戏/哈希与安装记录不匹配、UTF-16 BE/UTF-32/仅 CR/NUL、数组操作符与损坏标记、已有所有权、块内个人备注、反复安装、失败回退和多目标共存。
+- pipeline：命令行检查/扫描/审稿、拒绝把 runtime_tested 改成已测、从临时原件扫描→人工标记 fixture→资源构建→UnrealLocres 导出→repak list/unpack→交付 ZIP 说明与译文→实际 BAT 检测/安装/卸载，检查效果而非 grep 源码。未配置外部工具时，整链测试仍会跳过。
 
 生成的 `verification.json` 列出源件哈希、资源哈希、工具版本与 SHA、身份证据计数和独立导出结果；`package` 会再次验证包体、资源、元数据和当前实际译文，拒绝校验后被修改的 PAK。包内提供清单、译文对照和 ZIP 成员哈希。默认输出路径必须不存在，失败输出可保留排错，重试使用新路径。
 

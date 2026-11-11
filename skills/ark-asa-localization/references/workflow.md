@@ -37,7 +37,7 @@ retoc.exe unpack "mod.utoc" "work/extracted"
 {"display":true,"translation":"切换火炮姿态","review_note":"骑乘按键帮助标签，结合 HUD 上下文确认"}
 ```
 
-这是现有记录上的增补字段，不是完整 plan。禁止删除其 `path/source_sha256/offset/kind/source/namespace/key` 定位信息。`validate-plan` 会重算源件哈希、重新扫描并比对实际位置；嵌在显式文本中的 FString 不可另选为全局 CRC 项。
+这是现有记录上的增补字段，不是完整 plan。禁止删除其 `path/source_sha256/offset/kind/source/namespace/key` 定位信息。只把 `display` 设为 true 却没有 `translation` 会在审稿时失败，不能静默跳过。`validate-plan` 会重算源件哈希、重新扫描并比对实际位置；嵌在显式文本中的 FString 不可另选为全局 CRC 项。非 ASCII 原文还要在这时带上已观察的 `source_hash` 与 `source_hash_origin`。
 
 不要翻译事件/函数、资源路径、配置查找键、对象名、材质参数、刷怪条目名、按键绑定 ID。纯英文不是显示证据；人工 review_note 也不能替代对字段用途的检查。JSON UI 应只改确认的显示值，不改 JSON 键/事件/权限/绑定。
 

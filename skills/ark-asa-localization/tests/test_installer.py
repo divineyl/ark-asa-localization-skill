@@ -195,5 +195,124 @@ if ($LASTEXITCODE) {exit $LASTEXITCODE}
         self.assertIn(self.line, self.ini.read_text(encoding='utf-8-sig'))
         self.assertEqual(self.pak.read_bytes(), self.payload)
 
+    def test_battleye_client_is_accepted_and_server_only_is_not(self):
+        exe = self.game / 'ShooterGame/Binaries/Win64/ArkAscended.exe'
+        exe.rename(exe.with_name('ArkAscended_BE.exe'))
+        self.run_installer()
+        self.assertEqual(self.pak.read_bytes(), self.payload)
+        self.run_installer('Uninstall')
+        self.assertFalse(self.pak.exists())
+        kept = self.ini.read_bytes()
+        exe.with_name('ArkAscended_BE.exe').rename(exe.with_name('ArkAscendedServer.exe'))
+        self.run_installer(ok=False)
+        self.assertEqual(self.ini.read_bytes(), kept)
+        self.assertFalse(self.pak.exists())
+
+    def test_unreadable_ini_encodings_are_left_unchanged(self):
+        samples = [
+            b'\xff\xfe\x00\x00' + '中文'.encode('utf-32-le'),
+            b'\x00\x00\xfe\xff' + '中文'.encode('utf-32-be'),
+            b'[Internationalization]\rName=keep\r',
+            b'[Internationalization]\r\nName=a\x00b\r\n',
+        ]
+        for original in samples:
+            self.ini.write_bytes(original)
+            self.run_installer(ok=False)
+            self.assertEqual(self.ini.read_bytes(), original)
+            self.assertFalse(self.pak.exists())
+
+    def test_utf16_be_chinese_text_and_newline_are_preserved(self):
+        body = '[Other]\r\nName=中文\r\n'
+        original = b'\xfe\xff' + body.encode('utf-16-be')
+        self.ini.write_bytes(original)
+        self.run_installer()
+        updated = self.ini.read_bytes()
+        self.assertTrue(updated.startswith(b'\xfe\xff'))
+        text = updated[2:].decode('utf-16-be')
+        self.assertIn('Name=中文', text)
+        self.assertIn(self.line, text)
+        self.assertNotIn('\n', text.replace('\r\n', ''))
+
+    def test_uninstall_without_record_and_manifest_errors_write_nothing(self):
+        detected = self.run_installer('Uninstall')
+        self.assertFalse(self.pak.exists())
+        self.assertFalse(self.ini.exists())
+        self.assertEqual(detected.returncode, 0)
+        self.manifest['schema'] = 2
+        self.save_manifest()
+        self.run_installer(ok=False)
+        self.assertFalse(self.pak.exists())
+        self.assertFalse(self.ini.exists())
+
+    def test_state_mismatch_and_foreign_pak_are_not_overwritten(self):
+        self.pak.write_bytes(b'different payload same name')
+        self.run_installer(ok=False)
+        self.assertEqual(self.pak.read_bytes(), b'different payload same name')
+        self.assertFalse(self.ini.exists())
+        self.pak.unlink()
+        self.run_installer()
+        before_ini, before_pak = self.ini.read_bytes(), self.pak.read_bytes()
+        self.manifest['pak_sha256'] = 'ab' * 32
+        self.save_manifest()
+        self.run_installer(ok=False)
+        self.assertEqual(self.ini.read_bytes(), before_ini)
+        self.assertEqual(self.pak.read_bytes(), before_pak)
+
+    def test_version_mismatch_still_installs_and_longer_mod_id_does_not_match(self):
+        plugin = self.mod / 'Demo.uplugin'
+        plugin.write_text(json.dumps({'Description': 'Demo &cf_ugcID=123456', 'VersionName': 'other-version'}), encoding='utf-8')
+        self.run_installer()
+        self.assertEqual(self.pak.read_bytes(), self.payload)
+        self.run_installer('Uninstall')
+        plugin.write_text(json.dumps({'Description': 'cf_ugcID=123456789', 'VersionName': 'fixture-v1'}), encoding='utf-8')
+        self.run_installer(ok=False)
+        self.assertFalse(self.pak.exists())
+
+    def test_array_operators_and_broken_markers_stop_before_writing(self):
+        samples = [
+            '[Internationalization]\r\n.LocalizationPaths=Other\r\n',
+            '[Internationalization]\r\n!LocalizationPaths=Other\r\n',
+            '[Internationalization]\r\n-LocalizationPaths=Other\r\n',
+            '[Internationalization]\r\n; Demo123456 BEGIN - managed by installer\r\n' + self.line + '\r\n',
+            ('[Internationalization]\r\n; Demo123456 BEGIN - managed by installer\r\n' + self.line
+             + '\r\n; Demo123456 END - managed by installer\r\n; Demo123456 BEGIN - managed by installer\r\n'
+             + self.line + '\r\n; Demo123456 END - managed by installer\r\n'),
+        ]
+        for config in samples:
+            self.ini.write_bytes(config.encode())
+            self.run_installer(ok=False)
+            self.assertEqual(self.ini.read_bytes(), config.encode())
+            self.assertFalse(self.pak.exists())
+
+    def test_personal_line_inside_managed_block_survives_uninstall(self):
+        self.run_installer()
+        raw = self.ini.read_bytes()
+        end = b'; Demo123456 END - managed by installer'
+        self.assertIn(end, raw)
+        self.ini.write_bytes(raw.replace(end, 'Note=玩家备注\r\n'.encode() + end, 1))
+        self.run_installer('Uninstall')
+        result = self.ini.read_bytes()
+        self.assertIn('玩家备注'.encode(), result)
+        self.assertNotIn(b'Localization/Demo123456', result)
+        self.assertIn(b'Localization/ShooterGame', result)
+        self.assertFalse(self.pak.exists())
+
+
+class InstallerMessageTests(unittest.TestCase):
+    def test_user_facing_installer_errors_are_chinese(self):
+        text = (ROOT / 'scripts/install.ps1').read_text(encoding='utf-8')
+        for phrase in (
+            'schema 或 mod_id 无效。',
+            '本地化目标无效。',
+            'PAK 文件名必须包含目标并以 _P.pak 结尾。',
+            'PAK SHA256 无效。',
+            '必须提供 mod_version。',
+            '需有 ArkAscended.exe 或 ArkAscended_BE.exe，以及 Content\\Paks。',
+            '不会安装到进化或独立服务器。',
+        ):
+            self.assertIn(phrase, text)
+        self.assertNotIn('Invalid manifest schema or mod_id.', text)
+        self.assertNotIn('mod_version is required.', text)
+
 
 if __name__ == '__main__': unittest.main()
